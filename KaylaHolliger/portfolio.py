@@ -128,6 +128,116 @@ def meets_objective(portfolio_return, objective):
     return portfolio_return >= objective
 
 
+def search_portfolio(sleeves, correlations, objective, reserve_minimum, return_details=False):
+    """Return the least volatile feasible 5-percentage-point mix, or None.
+
+    Fully invested integer compositions of 20 units enumerate every long-only
+    grid allocation exactly once. Results retain unrounded decimal values.
+    """
+    validate_inputs(sleeves, correlations, objective)
+    if not math.isfinite(reserve_minimum) or not 0 <= reserve_minimum <= 1:
+        raise ValueError("Reserve minimum must be between 0 and 1.")
+    covariance = build_covariance_matrix(sleeves, correlations)
+
+    def compositions(total, count, prefix=()):
+        if count == 1:
+            yield prefix + (total,)
+        else:
+            for value in range(total + 1):
+                yield from compositions(total - value, count - 1, prefix + (value,))
+
+    best = None
+    tested = qualifying = 0
+    maximum = None
+    for units in compositions(20, len(sleeves)):
+        tested += 1
+        weights = [value / 20 for value in units]
+        result = expected_return(weights, sleeves)
+        reserve = reserve_eligible_weight(weights, sleeves)
+        # Tolerance only absorbs floating-point arithmetic at exact boundaries.
+        if reserve < reserve_minimum - 1e-12:
+            continue
+        maximum = result if maximum is None else max(maximum, result)
+        if result < objective - 1e-12:
+            continue
+        qualifying += 1
+        volatility = portfolio_volatility(weights, covariance)
+        if best is None or volatility < best["volatility"]:
+            best = {"weights": weights, "return": result,
+                    "volatility": volatility, "reserve_weight": reserve}
+    if return_details:
+        return {"portfolio": best, "mixes_tested": tested,
+                "mixes_qualifying": qualifying, "max_return_on_grid": maximum}
+    return best
+
+
+def estimate_from_csv(source, last_36_months=False):
+    """Return (sleeves, correlations) from chronological monthly prices.
+
+    Accept a path or a readable text/binary stream. Use sample standard
+    deviations and Pearson correlations; select the last 36 RETURNS after
+    computing price ratios (requires at least 37 prices). No filling of gaps.
+    CSV eligibility defaults to False: a price series cannot establish it.
+    """
+    import csv
+    import io
+    from datetime import date
+    from pathlib import Path
+    import statistics
+
+    raw = source.read() if hasattr(source, "read") else Path(source).read_bytes()
+    if isinstance(raw, bytes):
+        raw = raw.decode("utf-8-sig")
+    rows = list(csv.reader(io.StringIO(raw)))
+    if not rows or len(rows[0]) < 2:
+        raise ValueError("CSV needs a date column followed by ticker columns.")
+    names = [name.strip() for name in rows[0][1:]]
+    if any(not name for name in names) or len(set(names)) != len(names):
+        raise ValueError("Ticker headers must be nonempty and unique.")
+    prices, dates = [], []
+    for row in rows[1:]:
+        if not row:
+            continue
+        if len(row) != len(names) + 1:
+            raise ValueError("Every CSV row must have one price per ticker.")
+        try:
+            dates.append(date.fromisoformat(row[0].strip()))
+            values = [float(value) for value in row[1:]]
+        except ValueError as error:
+            raise ValueError("Use ISO dates (YYYY-MM-DD) and numeric prices.") from error
+        if any(not math.isfinite(value) or value <= 0 for value in values):
+            raise ValueError("Prices must be finite, positive, and never missing.")
+        prices.append(values)
+    if len(prices) < 3:
+        raise ValueError("At least three monthly price rows are required.")
+    months = [d.year * 12 + d.month for d in dates]
+    if any(b - a != 1 for a, b in zip(months, months[1:])):
+        raise ValueError("Dates must be oldest first, one row per consecutive month.")
+    returns = [[new[i] / old[i] - 1 for i in range(len(names))]
+               for old, new in zip(prices, prices[1:])]
+    if last_36_months:
+        if len(returns) < 36:
+            raise ValueError("Last 36 months requires at least 37 monthly price rows.")
+        returns = returns[-36:]
+    return estimate_monthly_returns(returns, names)
+
+
+def estimate_monthly_returns(returns, names):
+    """Shared annualization and correlation calculation for monthly returns."""
+    import statistics
+    series = list(zip(*returns))
+    deviations = [statistics.stdev(values) for values in series]
+    if any(value <= 0 for value in deviations):
+        raise ValueError("Each asset needs nonzero monthly return volatility.")
+    sleeves = [{"name": name, "return": statistics.mean(values) * 12,
+                "volatility": deviation * math.sqrt(12), "reserve_eligible": False}
+               for name, values, deviation in zip(names, series, deviations)]
+    correlations = [[1.0 if i == j else statistics.correlation(series[i], series[j])
+                     for j in range(len(names))] for i in range(len(names))]
+    validate_inputs(sleeves, correlations, 0.0)
+    return sleeves, correlations
+
+
 def print_portfolio(name, weights, sleeves, covariance, objective):
     result = expected_return(weights, sleeves)
     print(f"\n{name}")
