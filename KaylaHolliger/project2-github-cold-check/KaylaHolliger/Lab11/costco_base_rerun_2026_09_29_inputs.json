@@ -1,0 +1,62 @@
+{
+  "command": ".venv/bin/python COST_proforma_from_ABG.py",
+  "working_directory": "/Users/kaylaholliger/Documents/Courses/AIFinance2026/KaylaHolliger",
+  "model_sha256": "abe6d21f88414fe2971e3163559ab2e93843ecf15922a3d43b94765cb389ed10",
+  "units": "USD millions, except per-share values and ratios",
+  "opening_year": 2025,
+  "forecast_years": [
+    2026,
+    2027,
+    2028,
+    2029,
+    2030
+  ],
+  "OPENING": {
+    "sales": 269912.0,
+    "fees": 5323.0,
+    "cash": 14161.0,
+    "investments": 1123.0,
+    "receivables": 3203.0,
+    "inventory": 18116.0,
+    "other_current_assets": 1777.0,
+    "ppe": 31909.0,
+    "other_assets": 6810.0,
+    "payable": 19783.0,
+    "salaries": 5205.0,
+    "rewards": 2677.0,
+    "deferred_fees": 2854.0,
+    "other_liabilities": 11611.0,
+    "debt": 5805.0,
+    "equity": 29164.0
+  },
+  "ASSUMPTIONS": {
+    "sales_growth": [
+      0.08,
+      0.07,
+      0.06,
+      0.05,
+      0.04
+    ],
+    "fee_growth": [
+      0.09,
+      0.08,
+      0.07,
+      0.06,
+      0.05
+    ],
+    "gross_margin": 0.11124366460179615,
+    "sga_ratio": 0.09249681377634192,
+    "da_ratio": 0.008988114644773112,
+    "capex_ratio": 0.02,
+    "tax": 0.251,
+    "debt_rate": 0.04,
+    "cash_yield": 0.03,
+    "dividend_payout": 0.3,
+    "shares": 444.803,
+    "wacc": 0.08,
+    "terminal_growth": 0.03,
+    "terminal_roic": 0.2,
+    "operating_cash_ratio": 0.02,
+    "cost_of_equity": 0.08
+  }
+}
